@@ -51,6 +51,68 @@ function makeDefault(): CardState {
   };
 }
 
+function transformHandlesAfterRotation(
+  handles: HandlePositions,
+  sourceWidth: number,
+  sourceHeight: number,
+  rotatedWidth: number,
+  rotatedHeight: number,
+  angleDeg: number
+): HandlePositions {
+  const rad = (angleDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const sourceCenterX = sourceWidth / 2;
+  const sourceCenterY = sourceHeight / 2;
+  const rotatedCenterX = rotatedWidth / 2;
+  const rotatedCenterY = rotatedHeight / 2;
+
+  const rotatePoint = (x: number, y: number) => {
+    const offsetX = x - sourceCenterX;
+    const offsetY = y - sourceCenterY;
+    return {
+      x: rotatedCenterX + offsetX * cos - offsetY * sin,
+      y: rotatedCenterY + offsetX * sin + offsetY * cos,
+    };
+  };
+
+  // ImageCanvas represents vertical handles as image-space x coordinates and
+  // horizontal handles as image-space y coordinates. Transform their points on
+  // the corresponding image centerline through the same center rotation used
+  // by rotateImageOnCanvas(). For quarter turns, swap the handle groups onto
+  // their new dominant axes so the lines do not collapse at +/-90 degrees.
+  const verticalPoints = [
+    handles.leftEdge,
+    handles.leftInner,
+    handles.rightInner,
+    handles.rightEdge,
+  ].map((x) => rotatePoint(x, sourceCenterY));
+  const horizontalPoints = [
+    handles.topEdge,
+    handles.topInner,
+    handles.bottomInner,
+    handles.bottomEdge,
+  ].map((y) => rotatePoint(sourceCenterX, y));
+  const keepAxes = Math.abs(cos) >= Math.abs(sin);
+  const verticalValues = (keepAxes ? verticalPoints : horizontalPoints)
+    .map((point) => point.x)
+    .sort((a, b) => a - b);
+  const horizontalValues = (keepAxes ? horizontalPoints : verticalPoints)
+    .map((point) => point.y)
+    .sort((a, b) => a - b);
+
+  return {
+    leftEdge: verticalValues[0],
+    leftInner: verticalValues[1],
+    rightInner: verticalValues[2],
+    rightEdge: verticalValues[3],
+    topEdge: horizontalValues[0],
+    topInner: horizontalValues[1],
+    bottomInner: horizontalValues[2],
+    bottomEdge: horizontalValues[3],
+  };
+}
+
 export default function CardCenteringApp() {
   const [activeSide, setActiveSide] = useState<Side>("front");
   const [tool, setTool] = useState<Tool>("none");
@@ -236,12 +298,9 @@ export default function CardCenteringApp() {
     img.src = croppedDataUrl;
   };
 
-  const handleRotationApply = async (rotatedDataUrl: string) => {
+  const handleRotationApply = async (rotatedDataUrl: string, angleDeg: number) => {
     const img = new Image();
     img.onload = async () => {
-      const handles = defaultHandles(img.width, img.height);
-      const result = calculateCentering(handles);
-
       const tmpCanvas = document.createElement("canvas");
       tmpCanvas.width = img.width;
       tmpCanvas.height = img.height;
@@ -250,18 +309,30 @@ export default function CardCenteringApp() {
       const imageData = ctx.getImageData(0, 0, img.width, img.height);
       const rotationAnalysis = await analyzeRotation(imageData);
 
-      setCurrent((s) => ({
-        ...s,
-        imageDataUrl: rotatedDataUrl,
-        handles,
-        result,
-        rotationAnalysis,
-        zoom: 1,
-        panX: 0,
-        panY: 0,
-        imgWidth: img.width,
-        imgHeight: img.height,
-      }));
+      setCurrent((s) => {
+        const handles = transformHandlesAfterRotation(
+          s.handles,
+          s.imgWidth,
+          s.imgHeight,
+          img.width,
+          img.height,
+          angleDeg
+        );
+        const result = calculateCentering(handles);
+
+        return {
+          ...s,
+          imageDataUrl: rotatedDataUrl,
+          handles,
+          result,
+          rotationAnalysis,
+          zoom: 1,
+          panX: 0,
+          panY: 0,
+          imgWidth: img.width,
+          imgHeight: img.height,
+        };
+      });
       setTool("none");
     };
     img.src = rotatedDataUrl;
