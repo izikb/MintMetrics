@@ -90,31 +90,31 @@ export default function RotationTool({ imageDataUrl, suggestedAngle, onApply, on
     ctx.restore();
 
     // Grid — always at fixed screen coords (not affected by image pan/zoom)
-    const stroke  = Math.max(0.15, 0.8 / z);
     const colW    = cw / GRID_COLS;
     const rowH    = ch / GRID_ROWS;
     const midCol  = GRID_COLS / 2;
     const midRow  = GRID_ROWS / 2;
-    const dimLine    = "rgba(255,255,255,0.72)";
-    const brightLine = "rgba(255,255,255,1)";
 
-    // Difference makes white strokes invert the pixels underneath them, keeping
-    // the temporary grid visible on both light and dark artwork. Limit the
-    // compositing mode to the grid and restore it before the next frame.
+    const drawGrid = (color: string, normalWidth: number, centerWidth: number) => {
+      ctx.strokeStyle = color;
+      for (let i = 1; i < GRID_COLS; i++) {
+        ctx.lineWidth = i === midCol ? centerWidth : normalWidth;
+        ctx.beginPath(); ctx.moveTo(i * colW, 0); ctx.lineTo(i * colW, ch); ctx.stroke();
+      }
+      for (let j = 1; j < GRID_ROWS; j++) {
+        ctx.lineWidth = j === midRow ? centerWidth : normalWidth;
+        ctx.beginPath(); ctx.moveTo(0, j * rowH); ctx.lineTo(cw, j * rowH); ctx.stroke();
+      }
+    };
+
+    // An opaque white core with a dark outline keeps at least one part of every
+    // grid line visible over light, dark, and mid-tone artwork. Fixed screen
+    // widths also prevent the grid fading as the image is zoomed. Keep all
+    // temporary grid state isolated from the image drawing above.
     ctx.save();
-    ctx.globalCompositeOperation = "difference";
-    for (let i = 1; i < GRID_COLS; i++) {
-      const isMid = i === midCol;
-      ctx.strokeStyle = isMid ? brightLine : dimLine;
-      ctx.lineWidth   = isMid ? stroke * 2  : stroke;
-      ctx.beginPath(); ctx.moveTo(i * colW, 0); ctx.lineTo(i * colW, ch); ctx.stroke();
-    }
-    for (let j = 1; j < GRID_ROWS; j++) {
-      const isMid = j === midRow;
-      ctx.strokeStyle = isMid ? brightLine : dimLine;
-      ctx.lineWidth   = isMid ? stroke * 2  : stroke;
-      ctx.beginPath(); ctx.moveTo(0, j * rowH); ctx.lineTo(cw, j * rowH); ctx.stroke();
-    }
+    ctx.globalCompositeOperation = "source-over";
+    drawGrid("rgba(0,0,0,0.9)", 3.5, 5.5);
+    drawGrid("#FFFFFF", 1.5, 2.5);
     ctx.restore();
   }, [size]);
 
