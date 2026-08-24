@@ -5,7 +5,7 @@ import { RotateCcw, RotateCw, ZoomIn, ZoomOut } from "lucide-react";
 interface RotationToolProps {
   imageDataUrl: string;
   suggestedAngle: number;
-  onApply: (rotatedDataUrl: string) => void;
+  onApply: (rotatedDataUrl: string, angleDeg: number) => void;
   onCancel: () => void;
 }
 
@@ -95,10 +95,14 @@ export default function RotationTool({ imageDataUrl, suggestedAngle, onApply, on
     const rowH    = ch / GRID_ROWS;
     const midCol  = GRID_COLS / 2;
     const midRow  = GRID_ROWS / 2;
-    // Always dark-green-on-light — matches the centering canvas light style
-    const dimLine    = "rgba(30,100,55,0.22)";
-    const brightLine = "rgba(30,100,55,0.55)";
+    const dimLine    = "rgba(255,255,255,0.72)";
+    const brightLine = "rgba(255,255,255,1)";
 
+    // Difference makes white strokes invert the pixels underneath them, keeping
+    // the temporary grid visible on both light and dark artwork. Limit the
+    // compositing mode to the grid and restore it before the next frame.
+    ctx.save();
+    ctx.globalCompositeOperation = "difference";
     for (let i = 1; i < GRID_COLS; i++) {
       const isMid = i === midCol;
       ctx.strokeStyle = isMid ? brightLine : dimLine;
@@ -111,6 +115,7 @@ export default function RotationTool({ imageDataUrl, suggestedAngle, onApply, on
       ctx.lineWidth   = isMid ? stroke * 2  : stroke;
       ctx.beginPath(); ctx.moveTo(0, j * rowH); ctx.lineTo(cw, j * rowH); ctx.stroke();
     }
+    ctx.restore();
   }, [size]);
 
   // ── Schedule draw via rAF — coalesces rapid calls into one frame ──────────
@@ -214,8 +219,9 @@ export default function RotationTool({ imageDataUrl, suggestedAngle, onApply, on
   const handleApply = () => {
     const img = imgRef.current;
     if (!img) return;
-    const c = rotateImageOnCanvas(img, angleRef.current);
-    onApply(c.toDataURL("image/png"));
+    const appliedAngle = angleRef.current;
+    const c = rotateImageOnCanvas(img, appliedAngle);
+    onApply(c.toDataURL("image/png"), appliedAngle);
   };
 
   return (
